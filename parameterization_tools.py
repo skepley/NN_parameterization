@@ -10,7 +10,6 @@ import numpy as np
 from numpy.polynomial.chebyshev import Chebyshev as npChebyshev
 from scipy import optimize
 from scipy.linalg import toeplitz
-import matplotlib.pyplot as plt
 
 
 def ezcat(*coordinates):
@@ -35,7 +34,7 @@ def ezcat(*coordinates):
 def find_root(f, Df, initialGuess):
     """Default root finding method to use if one is not specified"""
 
-    solution = optimize.root(f, initialGuess, jac=Df, method='hybr')  # set root finding algorithm
+    solution = optimize.root(f, initialGuess, jac=Df, method='hybr', tol=1e-13)  # set root finding algorithm
     return solution.x  # return only the solution vector
 
 
@@ -112,7 +111,8 @@ class Sequence:
 
     def embed(self, coefficients):
         """Embed coefficients into the correct truncation space by padding or truncating coefficients as needed."""
-
+        # print(self.N)
+        # print(coefficients)
         if len(coefficients) >= self.N:
             embed_coefficients = coefficients[:self.N]  # truncate to order N
         else:
@@ -245,6 +245,11 @@ class Taylor(Sequence):
         col = self.project(dims[1])
         row = ezcat(self(0), np.zeros(dims[0] - 1))
         return toeplitz(col.coef, row)
+
+    def eval(self, t):
+        """Evaluate this Taylor polynomial"""
+
+        return np.polyval(np.flip(self.coef), t)
 
     @staticmethod
     def randint(N, maxValue=10):
