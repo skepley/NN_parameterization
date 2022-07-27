@@ -7,7 +7,7 @@ A collection of helper functions for parameterizing orbits in Examples from the 
     Date: 7/5/22;
 """
 import numpy as np
-from numpy.polynomial.chebyshev import Chebyshev as npChebyshev
+from numpy import polynomial as npoly
 from scipy import optimize
 from scipy.linalg import toeplitz
 
@@ -31,10 +31,10 @@ def ezcat(*coordinates):
         return np.concatenate([np.array([coordinates[0]]), ezcat(*coordinates[1:])])
 
 
-def find_root(f, Df, initialGuess):
+def find_root(f, initialGuess, **kwargs):
     """Default root finding method to use if one is not specified"""
 
-    solution = optimize.root(f, initialGuess, jac=Df, method='hybr', tol=1e-13)  # set root finding algorithm
+    solution = optimize.root(f, initialGuess, **kwargs)  # set root finding algorithm
     return solution.x  # return only the solution vector
 
 
@@ -164,7 +164,7 @@ class Chebyshev(Sequence):
         """Initialize a Chebyshev instance"""
 
         super().__init__(*args, **kwargs)  # initialize Sequence instance and pass through *args
-        self.numpy = self.numpy_rep()
+        self.numpy = self.to_numpy()
 
     def __mul__(self, rightFactor, *truncate):
         """Product of Chebyshev sequences is given by discrete convolution. We do this by hijacking the numpy Chebyshev
@@ -186,13 +186,13 @@ class Chebyshev(Sequence):
 
         return self.numpy(t)
 
-    def numpy_rep(self):
+    def to_numpy(self):
         """Return a representation of this sequence in the numpy Chebyshev class. In the numpy implementation the factor
         of 2 is absorbed into the higher order coefficients. This class also ignores higher order zero coefficients which makes
-         it annoying to use directly. However, the numpy instance is hijacked for some class methods to test for
+        it annoying to use directly. However, the numpy instance is hijacked for some class methods to test for
         correctness or ensure efficiency."""
 
-        return npChebyshev(ezcat(self.coef[0], 2 * self.coef[1:]))
+        return npoly.chebyshev.Chebyshev(ezcat(self.coef[0], 2 * self.coef[1:]))
 
     def left_multiply_operator(self):
         """Return a matrix representation for the linear operator on S which acts by multiplication with self composed
@@ -209,6 +209,25 @@ class Chebyshev(Sequence):
     def randint(N, maxValue=10):
         """Return a random Chebyshev sequence of length N with integer coefficients up to maxValue"""
         return Chebyshev(np.random.randint(maxValue, size=N))
+
+    @staticmethod
+    def from_numpy(npChebyshev, *truncate):
+        """Convert an array of coefficients or a numpy.polynomial.chebyshev.Chebyshev instance into a Chebyshev instance."""
+
+        if issubclass(type(npoly.chebyshev.Chebyshev), np.polynomial.chebyshev.Chebyshev):
+            return Chebyshev.from_numpy(npChebyshev.coef, *truncate)
+        else:
+            return Chebyshev(ezcat(npChebyshev[0], 0.5 * npChebyshev[1:]),
+                             *truncate)  # Rescale Chebyshev coefficients to one sided Fourier
+
+    @staticmethod
+    def from_data(data):
+        """Return a Chebyshev interpolant for data evaluated at the Chebyshev nodes"""
+
+        N = len(data)  # get the order of the interpolant (this is the degree + 1)
+        chebNodes = npoly.chebyshev.chebpts2(N)  # grid of chebyshev nodes where the data is assumed to be defined
+        numpy_cheb_coefs = npoly.chebyshev.chebfit(chebNodes, data, N - 1)  # chebyshev coefficients in numpy format
+        return Chebyshev.from_numpy(numpy_cheb_coefs)
 
 
 class Taylor(Sequence):
@@ -251,17 +270,18 @@ class Taylor(Sequence):
 
         return np.polyval(np.flip(self.coef), t)
 
+    def taylor2chebyshev(self):
+        """Change of basis from Taylor to Chebyshev."""
+
+        # use numpy to convert from Taylor to Chebyshev basis. Note that numpy throws away leading zeros.
+        numpy_chebyshev_coefs = npoly.chebyshev.poly2cheb(self.coef)
+        # specify the size in order to replace zeros
+        return Chebyshev(ezcat(numpy_chebyshev_coefs[0], 0.5 * numpy_chebyshev_coefs[1:]), self.N)
+
     @staticmethod
     def randint(N, maxValue=10):
-        """Return a random Taylor sequence of length N with integer coefficients up to maxValue"""
+        """Simple function to return a random Taylor sequence of length N with integer coefficients up to maxValue"""
         return Taylor(np.random.randint(maxValue, size=N))
-
-
-def center_shift_map(seq):
-    """Evaluate the centered shift map appearing in IVP/BVP for Chebyshev series."""
-
-    mid_sequence = np.array([(seq(j - 1) - seq(j + 1)) / (2 * j) for j in range(1, seq.N - 1)])
-    return Chebyshev(ezcat(0, mid_sequence, seq(seq.N - 1) / (2 * (seq.N - 1))))
 
 
 def right_shift_map(seq, *truncate):
@@ -289,10 +309,20 @@ def diff_map_matrix(N):
     return np.diag(np.arange(1, N), 1)
 
 
+def center_shift_map(seq):
+    """Evaluate the centered shift map appearing in IVP/BVP for Chebyshev series."""
+
+    mid_sequence = np.array([(seq(j - 1) - seq(j + 1)) / (2 * j) for j in range(1, seq.N - 1)])
+    return Chebyshev(ezcat(0, mid_sequence, seq(seq.N - 1) / (2 * (seq.N - 1))))
+
+
+# def I_0(seq):
+#     """Evaluate the map I_0(h) = (0, h_1, h_2,...,h_{N-1}) appearing in IVP/BVP for Chebyshev series"""
+#
+#     return Chebyshev(ezcat(0, seq.coef[1:]))
+
 if __name__ == "__main__":
     a = Taylor.randint(5)
     h = Taylor.randint(5)
-    c = a * h
-    print(c)
-    L = a.left_multiply_operator(12, 20)
-    print(L @ h.project(12).coef)
+    c = npoly.chebyshev.poly2cheb(a.coef)
+    A = Chebyshev(c)
