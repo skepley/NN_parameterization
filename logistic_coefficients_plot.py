@@ -10,7 +10,7 @@ Make plots of the first few coefficients for the logistic function
 """
 # IMPORT MAP TO LEARN
 import numpy as np
-from logistic_coefficient_map import logistic_coefficient_map, manifold_map
+from logistic_coefficient_map import logistic_coefficient_map, parameterization_manifold_map
 import matplotlib.pyplot as plt
 
 plt.close('all')
@@ -18,7 +18,7 @@ K = np.array([-1, 2])
 withTime = False  # specify if NN should try to learn the timestep as well or fix it
 fig, ax = plt.subplots()
 N = 10
-imgSize, TaylorCoefficientMap = manifold_map(logistic_coefficient_map, N, withTime)
+imgSize, TaylorCoefficientMap = parameterization_manifold_map(logistic_coefficient_map, N, withTime)
 plt_list = []
 x = np.linspace(*K, 200)
 tau_singular = np.argwhere((x == 0.5) | (x == 1.0) | (x == 0))

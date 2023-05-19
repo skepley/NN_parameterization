@@ -2,6 +2,7 @@ from parameterization_tools import *
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
+
 # EXAMPLE 1:
 # The map for the first N Taylor coefficients of the flow for ODE x' = x^2 - x
 # This is a map of the form, T: R ---> R^N. In this simple case the map can be computed with any discrete convolution
@@ -26,23 +27,37 @@ def logistic_taylor_orbit(x_0, N, tau=1.0):
 
 def logistic_chebyshev_orbit(x_0, N, tau=1.0):
     """Chebyshev coefficient map for the flow of the logistic equation with domain parameter tau computed via Newton iteration.
-    Initial guess is obtained by RK45 integration at the Chebyshev nodes followed by interpolation."""
+    Initial guess is obtained by RK45 integration at the Chebyshev nodes followed by interpolation
+
+    a = logistic_chebyshev_orbit(x_0, N) returns the Chebyshev series of order N parameterizing the orbit of the logistic
+        equation x' = x^2 - x with initial data x_0.
+
+    a = logistic_chebyshev_orbit(x_0, N, tau=T) returns the Chebyshev series of order N parameterizing the orbit of the
+        logistic equation x' = T * (x^2 - x) with initial data x_0 and domain parameter T > 0.
+
+    Example:
+        x_0 = 0.5
+        N = 25
+        tau = 3
+        chebsol = logistic_chebyshev_orbit(x_0, N, tau=tau)  # Return a chebyshev series parameterizing the orbit for t in [0, 6]
+        fig, ax = plt.subplots()  # Verify the parameterization by plotting against rk45
+        cheb_eval = np.linspace(-1, 1, 100)  # uniform partition of [-1, 1] to evaluate chebyshev series
+        t_eval = np.linspace(0, 2 * tau, 100)  # time nodes associated with evaluation of the true solution for t in [0, 6]
+        ax.scatter(t_eval, phi(t_eval, x_0), 3)  # true solution plotted on [0, 6]
+        ax.plot(t_eval, chebsol.eval(cheb_eval), 'r:')  # chebyshev solution plotted on [-1, 1]
+        plt.show()"""
 
     # start with an initial guess obtained from numerical integration
     chebyshevNodes = npoly.chebyshev.chebpts2(N)
-    tNodes = tau*(chebyshevNodes + 1)  # map from [-1, 1] into the interval [0, 2*tau]
+    tNodes = tau * (chebyshevNodes + 1)  # map from [-1, 1] into the interval [0, 2*tau]
     rk45_solution = solve_ivp(lambda t, y: y ** 2 - y, [0, 2 * tau], [x_0], t_eval=tNodes)
     chebyshev_guess = Chebyshev.from_data(np.ravel(rk45_solution.y))
-
-
-    # taylor_guess = logistic_taylor_orbit(x_0, np.min([N, 20]), tau=tau).project(N)  # Compute no more than 20 degree Taylor polynomial
-    # cheb_guess = taylor_guess.taylor2chebyshev()
 
     # iterate Newton operator for the characterization map to refine the guess
     F = lambda u: zero_map(tau, x_0, N, u, 'Chebyshev', size=N)
     DF = lambda u: zero_map_diff(tau, N, u, 'Chebyshev', size=N)
-    rk45_solution = find_root(F, chebyshev_guess.coef, jac=DF, tol=1e-13)
-    return Chebyshev(rk45_solution)
+
+    return Chebyshev(find_root(F, chebyshev_guess.coef, jac=DF, tol=1e-13))
 
 
 def logistic_characteristic_map(tau, x_0, seq, size=None):
@@ -68,9 +83,9 @@ def logistic_characteristic_map(tau, x_0, seq, size=None):
         # dimensional range when seq is a polynomial.
 
     if seq.is_taylor():
-        return (right_shift_map(diff_map(seq) - tau * (seq ** 2 - seq)) + (seq(0) - x_0) * seq.id()).project(size)
+        return (right_shift_map(diff_map(seq) - tau * (seq ** 2 - seq)) + (seq[0] - x_0) * seq.id()).project(size)
     else:
-        return (tau * center_shift_map(seq ** 2 - seq) - Chebyshev(ezcat(0, seq.coef[1:])) + (
+        return (tau * center_shift_map(seq ** 2 - seq) - Chebyshev(ezcat(0, seq[1:])) + (
                 seq.eval(-1) - x_0) * seq.id()).project(
             size)
 
@@ -153,6 +168,15 @@ def zero_map_diff(tau, N, coefVector, basis, size=None):
         return logistic_characteristic_diff(tau, Chebyshev(coefVector, N), size=size)
 
 
+# define a zero finding problem for tau
+def newton_residual(x_0, tau, u):
+    """Evaluate the map |DF(u)^{-1} * F(u)| where u is a zero of the characterization map to order N"""
+
+    y = logistic_characteristic_map(tau, x_0, u)
+    dy = logistic_characteristic_diff(tau, u)
+    return np.linalg.norm(np.linalg.solve(dy, y.coef))
+
+
 # domain parameter definitions
 def rescale(sequence, tau):
     """Generic function for rescaling a given parameterization sequence for an orbit of
@@ -166,21 +190,28 @@ def rescale(sequence, tau):
         return Taylor(sequence.coef * powerVector)
 
     else:  # Chebyshev rescaling by Newton iteration.
-        pass
+        chebyshev_guess = Chebyshev(
+            ezcat(sequence[0], tau * sequence.coef[1:]))  # initial guess is just rescaling coefficients by tau
+
+        # iterate Newton operator for the characterization map to refine the guess
+        F = lambda u: zero_map(tau, x_0, N, u, 'Chebyshev', size=N)
+        DF = lambda u: zero_map_diff(tau, N, u, 'Chebyshev', size=N)
+        chebyshev_coefs = find_root(F, chebyshev_guess.coef, jac=DF, tol=1e-13)
+        return Chebyshev(chebyshev_coefs)
 
 
 def tau_from_last_coef(sequence, mu=np.finfo(float).eps):
-    """Set domain parameter by last coefficient decay. Return the rescaled Taylor coefficients which have last coefficient norm
-    equal to mu, and the domain parameter which achieves this decay."""
+    """Set domain parameter by last coefficient decay. Input is a sequence computed with domain parameter equal to 1.
+    Returns the domain parameter rescaling which forces the last coefficient norm to be equal to mu."""
 
     maxIdx = np.max(np.nonzero(sequence.coef))  # index of the last nonzero coefficient
-    tau = (mu / np.abs(sequence(maxIdx))) ** (1 / maxIdx)
+    tau = (mu / np.abs(sequence[maxIdx])) ** (1 / maxIdx)
     return tau
 
 
 def tau_from_exp_reg(sequence):
-    """Set domain parameter by the slope of the best fit exponential regression. Return the rescaled Taylor/Chebyshev
-    coefficients and the domain parameter.
+    """Set domain parameter by the slope of the best fit exponential regression. Input is a sequence computed with
+    domain parameter equal to 1. Return the domain parameter as the exp(slope) of this best fit line.
 
     Example:
         a = logistic_taylor_orbit(0.5, 100, tau=1.0)
@@ -197,6 +228,28 @@ def tau_from_exp_reg(sequence):
     A = np.row_stack([X, np.ones(np.shape(X))]).T  # matrix for the normal equations
     slope = np.linalg.lstsq(A, Y, rcond=None)[0][0]
     return np.exp(slope)
+
+
+def tau_from_residual(x_0, sequence, mu, bracket=(0, 10.0)):
+    """Set domain parameter by the residual of the finite rank Newton map. Input is a sequence computed with
+    domain parameter equal to 1. Return the domain parameter satisfying |DF(u)^{-1} * F(u)| = mu."""
+
+    # define a zero finding problem for tau
+    def F(tau):
+        """Evaluate the zero finding problem for tau_3"""
+
+        # call with *tau to unpack numpy array. If this continues to be a problem I have to vectorize the characteristic map calls
+        test_seq = rescale(sequence, tau)
+        return newton_residual(x_0, tau, test_seq)
+
+    return lambda tau: F(tau) - mu
+
+    # soln = optimize.root_scalar(lambda tau: F(tau) - mu, bracket=bracket)
+    # if soln.converged:
+    #     return soln.root
+    # else:
+    #     print('Domain parameter failed to find a root in the interval: {0}. Try a wider range'.format(bracket))
+    #     raise KeyboardInterrupt
 
 
 # define functions for training a neural network parameterization
@@ -225,48 +278,102 @@ def parameterization_manifold_map(coefficientMap, N, tauMap):
     return coefficient_map
 
 
-# def logistic_chebyshev_zero_map(tau, x_0, coef):
-#     """Evaluate the Chebyshev IVP operator map. This map returns zero if and only if u is a (truncated) coefficient sequence
-#     for the orbit of f through x_0 with time rescaling, tau."""
-#
-#     u = Chebyshev(coef)
-#     fu = u.__pow__(2, u.N) - u
-#     F_0 = u.eval(-1) - x_0
-#     Fj = tau * center_shift_map(fu) - u
-#     Fj.coef[0] = 0
-#     Fu = F_0 * u.id() + Fj
-#     return Fu.coef
-
-
-# def diff_chebyshev_zero_map(tau, coef):
-#     """Evaluate the derivative of the Chebyshev IVP operator map for the logistic equation. Returns a Jacobian matrix
-#     of the same size as u."""
-#     u = Chebyshev(coef)
-#     DF_0 = np.array(ezcat(1, [2 * (-1) ** j for j in range(1, u.N)]))  # row 1 of the jacobian
-#     DF_j = tau * center_shift_map(2 * u - u.id()).left_multiply_operator() - np.eye(u.N)
-#     return np.row_stack([DF_0, DF_j[1:, :]])
-
-
-N = 25
+# # %%
 x_0 = 0.5
-tau = 10
-
-chebNodes = npoly.chebyshev.chebpts2(N)
-t_node = tau*(chebNodes + 1)
-sol = solve_ivp(lambda t, y: y**2 - y, [0, 2 * tau], [x_0], t_eval=t_node)
-chebsol = logistic_chebyshev_orbit(x_0, N, tau=tau)
-reg_u = Chebyshev.from_data(np.ravel(sol.y))
+N = 15
+tau = 1
+u = logistic_chebyshev_orbit(x_0, N, tau=tau)
+yN = logistic_characteristic_map(tau, x_0, u, size=N)
+yF = logistic_characteristic_map(tau, x_0, u)
 
 
 
+# %%  plots of newton steps
 
-# %%
+# res = lambda seq, tau: newton_residual(x_0, tau, rescale(seq, tau))
 
-fig, ax = plt.subplots()
-cheb_eval = np.linspace(-1, 1, 100)  # uniform partition of [-1, 1] to evaluate chebyshev series
-t_eval = np.linspace(0, 2 * tau, 100)  # evaluate true solution here
-ax.scatter(t_eval, phi(t_eval, x_0), 3)
-ax.plot(t_eval, reg_u.eval(cheb_eval))
-# ax.plot(t_eval, chebsol.eval(cheb_eval), 'r:')
-# ax.scatter(sol.t, sol.y)
-plt.show()
+# a = logistic_taylor_orbit(x_0, N)
+# # ta = tau_from_residual(x_0, a, mu)
+# tt = np.linspace(2.0, 3.0, 100)
+# tdata = np.array([res(a, t) for t in tt])
+# plt.figure()
+# plt.plot(tt, tdata)
+# plt.title('Taylor')
+# plt.show()
+
+
+
+
+
+# c = logistic_chebyshev_orbit(x_0, N)
+# tt = np.linspace(0.1, 2.2, 50)
+# cdata = np.array([res(c, t) for t in tt])
+# cdata2 = np.array([np.linalg.norm(zero_map(t, x_0, N, rescale(c, t).coef, 'Chebyshev')) for t in tt])
+# cdata3 = np.array([np.linalg.norm(logistic_characteristic_map(t, x_0, logistic_chebyshev_orbit(x_0, N, tau=t)).coef) for t in tt])
+#
+# plt.figure()
+# plt.plot(tt, cdata)
+# plt.title('Chebyshev: next Newton step size using rescale')
+# plt.show()
+#
+# plt.figure()
+# plt.plot(tt, cdata2)
+# plt.title('Chebyshev: zero map residual using rescale')
+# plt.show()
+#
+#
+# plt.figure()
+# plt.plot(tt, cdata3)
+# plt.title('Chebyshev: zero map residual using interpolation')
+# plt.show()
+
+
+
+
+# %%  the oddly behaved times
+# t1 = 3.6055276381909547
+# t2 = 3.6180904522613067
+# # c1 = rescale(c, t1)
+# c1 = logistic_chebyshev_orbit(x_0, N, t1)
+# # c2 = rescale(c, t2)
+# c2 = logistic_chebyshev_orbit(x_0, N, t2)
+#
+# r1 = newton_residual(x_0, t1, c1)
+# r2 = newton_residual(x_0, t2, c2)
+# print(r1, r2)
+#
+# y1 = logistic_characteristic_map(t1, x_0, c1).norm()
+# y2 = logistic_characteristic_map(t2, x_0, c2).norm()
+# print(y1, y2)
+#
+# z0 = zero_map(1, x_0, N, c.coef, 'Chebyshev')
+# z1 = zero_map(t1, x_0, N, c1.coef, 'Chebyshev')
+# z2 = zero_map(t2, x_0, N, c2.coef, 'Chebyshev')
+# print([np.linalg.norm(z) for z in [z0, z1, z2]])
+
+
+
+
+# # %% Taylor vs Chebyshev C^K vs analytic
+# x_0 = 0.5
+# N = 25
+# tau = 3
+# a = logistic_taylor_orbit(x_0, N, tau=1)
+# c = logistic_chebyshev_orbit(x_0, N, 0.5 * tau)
+#
+# t_eval = np.linspace(0, tau, 100)
+# tay_eval = np.linspace(0, 1, 100)
+# cheb_eval = np.linspace(-1, 1, 100)
+#
+# fig, ax = plt.subplots()
+# plt.figure()
+# ax.plot(t_eval, c.eval(cheb_eval))
+# ax.plot(t_eval, a.eval(tay_eval), 'r:')
+#
+# plt.figure()
+# plt.plot(t_eval, a.eval(tay_eval), 'r:')
+# # plt.show()
+#
+# plt.figure()
+# plt.plot(t_eval, c.eval(cheb_eval))
+# # plt.show()

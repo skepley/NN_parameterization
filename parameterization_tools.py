@@ -34,8 +34,12 @@ def ezcat(*coordinates):
 def find_root(f, initialGuess, **kwargs):
     """Default root finding method to use if one is not specified"""
 
-    solution = optimize.root(f, initialGuess, **kwargs)  # set root finding algorithm
-    return solution.x  # return only the solution vector
+    solution = optimize.root(f, initialGuess, **kwargs)  # set root finding algorithm to a krylov method as default
+    if solution.success:
+        return solution.x  # return only the solution vector if root finder was successful
+    else:
+        print('Rootfinder failed to converge')
+        return np.array(len(solution.x) * [np.nan])  # return the entire solution to inspect and troubleshoot
 
 
 class Sequence:
@@ -54,13 +58,16 @@ class Sequence:
             self.N = len(coefficients)
         self.coef = self.embed(coefficients)
 
-    def __call__(self, idx):
-        """Return coefficients of the sequence."""
-
-        return self.coef[idx]
+    # def __call__(self, idx):
+    #     """Return coefficients of the sequence."""
+    #
+    #     return self.coef[idx]
 
     def __repr__(self):
-        return repr(type(self)) + '  Order:{0} \n'.format(self.N) + repr(self.coef)
+        return self.__str__()
+
+    def __str__(self):
+        return f"{self.basis}({self.N}) \n{self.coef}"
 
     def __rmul__(self, left_factor):
         """Multiplication by any scalar on the left for an arbitrary sequence is defined pointwise. This is called
@@ -103,6 +110,11 @@ class Sequence:
         else:
             return self.__mul__(self.__pow__(exponent - 1, *args),
                                 *args)  # recursively multiply and pass through variable arguments
+
+    def __getitem__(self, idx):
+        """Coefficient indexing and slicing"""
+
+        return self.coef[idx]
 
     def id(self):
         """Return the multiplicative identity sequence in the same Banach algebra as self"""
@@ -147,7 +159,7 @@ class Sequence:
         if nu == 1:
             return np.sum(np.abs(self.coef))
         else:
-            return np.sum([nu ** j * np.abs(self(j)) for j in range(self.N)])
+            return np.sum([nu ** j * np.abs(self[j]) for j in range(self.N)])
 
     def is_taylor(self):
         """return true if self is a Taylor sequence and false assumes its a Chebyshev sequence"""
@@ -164,6 +176,7 @@ class Chebyshev(Sequence):
         """Initialize a Chebyshev instance"""
 
         super().__init__(*args, **kwargs)  # initialize Sequence instance and pass through *args
+        self.basis = 'Chebyshev'
         self.numpy = self.to_numpy()
 
     def __mul__(self, rightFactor, *truncate):
@@ -234,6 +247,10 @@ class Taylor(Sequence):
     """Taylor coefficient sequence of the form (a_0, a_1,...,a_{N-1}) representing the polynomial function
     sum a_j * t^j."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.basis = 'Taylor'
+
     def __mul__(self, rightFactor, *truncate):
         """Return a Cauchy product"""
 
@@ -262,7 +279,7 @@ class Taylor(Sequence):
             dims = [self.N, self.N]
 
         col = self.project(dims[1])
-        row = ezcat(self(0), np.zeros(dims[0] - 1))
+        row = ezcat(self[0], np.zeros(dims[0] - 1))
         return toeplitz(col.coef, row)
 
     def eval(self, t):
@@ -299,7 +316,7 @@ def right_shift_matrix(N):
 def diff_map(seq, *truncate):
     """Evaluate the differentiation map for solving IVP with Taylor"""
 
-    return Taylor(np.array([(j + 1) * seq(j + 1) for j in range(seq.N - 1)]), *truncate)
+    return Taylor(np.array([(j + 1) * seq[j + 1] for j in range(seq.N - 1)]), *truncate)
 
 
 def diff_map_matrix(N):
@@ -312,17 +329,5 @@ def diff_map_matrix(N):
 def center_shift_map(seq):
     """Evaluate the centered shift map appearing in IVP/BVP for Chebyshev series."""
 
-    mid_sequence = np.array([(seq(j - 1) - seq(j + 1)) / (2 * j) for j in range(1, seq.N - 1)])
-    return Chebyshev(ezcat(0, mid_sequence, seq(seq.N - 1) / (2 * (seq.N - 1))))
-
-
-# def I_0(seq):
-#     """Evaluate the map I_0(h) = (0, h_1, h_2,...,h_{N-1}) appearing in IVP/BVP for Chebyshev series"""
-#
-#     return Chebyshev(ezcat(0, seq.coef[1:]))
-
-if __name__ == "__main__":
-    a = Taylor.randint(5)
-    h = Taylor.randint(5)
-    c = npoly.chebyshev.poly2cheb(a.coef)
-    A = Chebyshev(c)
+    mid_sequence = np.array([(seq[j - 1] - seq[j + 1]) / (2 * j) for j in range(1, seq.N - 1)])
+    return Chebyshev(ezcat(0, mid_sequence, seq[seq.N - 1] / (2 * (seq.N - 1))))
