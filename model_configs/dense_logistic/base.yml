@@ -1,0 +1,26 @@
+#key:4
+#
+#key2:
+#  -
+#    - 1
+#    - 2
+#  -
+#    - 3
+#    - 4
+#
+#key3:
+#  key4: 'dog'
+
+layers:
+  -
+    input_size: 1
+    output_size: 10
+    activation: 'RELU'
+  -
+    input_size: 10
+    output_size: 10
+    activation: 'RELU'
+  -
+    input_size: 10
+    output_size: 100
+    activation:

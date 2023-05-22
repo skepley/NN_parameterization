@@ -50,7 +50,7 @@ class Sequence:
 
         if isinstance(coefficients, list):
             coefficients = np.array(
-                coefficients)  # conversion to numpy array is necessary for multiplication to act correctly
+                coefficients, dtype=np.float32)  # conversion to numpy array is necessary for multiplication to act correctly
 
         if truncation:
             self.N = truncation[0]
@@ -123,8 +123,7 @@ class Sequence:
 
     def embed(self, coefficients):
         """Embed coefficients into the correct truncation space by padding or truncating coefficients as needed."""
-        # print(self.N)
-        # print(coefficients)
+
         if len(coefficients) >= self.N:
             embed_coefficients = coefficients[:self.N]  # truncate to order N
         else:

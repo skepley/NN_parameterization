@@ -17,7 +17,7 @@ def logistic_taylor_orbit(x_0, N, tau=1.0):
         """The recursive Cauchy product terms for the logistic Taylor coefficient map"""
         return np.dot(a, np.flip(a)) - a[-1]
 
-    taylorCoefficient = np.array([float(x_0)])  # initialize Taylor coefficient vector
+    taylorCoefficient = np.array([np.float32(x_0)])  # initialize Taylor coefficient vector
     for j in range(N - 1):
         tNext = (tau / (j + 1)) * recursive_map(taylorCoefficient)
         taylorCoefficient = np.append(taylorCoefficient, tNext)
@@ -200,12 +200,12 @@ def rescale(sequence, tau):
         return Chebyshev(chebyshev_coefs)
 
 
-def tau_from_last_coef(sequence, mu=np.finfo(float).eps):
+def tau_from_last_coef(coefficients, mu=np.finfo(float).eps):
     """Set domain parameter by last coefficient decay. Input is a sequence computed with domain parameter equal to 1.
     Returns the domain parameter rescaling which forces the last coefficient norm to be equal to mu."""
 
-    maxIdx = np.max(np.nonzero(sequence.coef))  # index of the last nonzero coefficient
-    tau = (mu / np.abs(sequence[maxIdx])) ** (1 / maxIdx)
+    maxIdx = np.max(np.nonzero(coefficients))  # index of the last nonzero coefficient
+    tau = (mu / np.abs(coefficients[maxIdx])) ** (1 / maxIdx)
     return tau
 
 
