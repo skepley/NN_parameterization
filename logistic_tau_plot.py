@@ -10,7 +10,7 @@ Make plots of the tau map for the logistic function
 """
 # IMPORT MAP TO LEARN
 import numpy as np
-from logistic_coefficient_map import logistic_coefficient_map, parameterization_manifold_map
+from logistic_map import logistic_taylor_orbit, parameterization_manifold_map, tau_from_last_coef
 import matplotlib.pyplot as plt
 
 # matplotlib.rcParams['text.usetex'] = True
@@ -27,7 +27,7 @@ fig, ax = plt.subplots()
 plt_list = []
 for N in N_values:
     print(N)
-    imgSize, TaylorCoefficientMap = parameterization_manifold_map(logistic_coefficient_map, N, withTime)
+    TaylorCoefficientMap = parameterization_manifold_map(logistic_taylor_orbit, N, tau_from_last_coef)
     # sample tau map
     x = np.linspace(*K, 1000)
     tau_singular = np.argwhere((x == 0.5) | (x == 1.0) | (x == 0))
@@ -41,4 +41,4 @@ ax.set(xlabel=r"$x$", ylabel=R"$\tau_\mu$")
 # ax.legend((muPlot for muPlot in plt_list), ('mu = ' + str(N) for N in N_values), loc='upper right', shadow=True)
 ax.legend(loc='upper right', shadow=True)
 plt.show()
-fig.savefig('/users/shane/dropbox/0DiscreteConvolutionAI/logistic_tau_plot.png')
+# fig.savefig('/users/shane/dropbox/0DiscreteConvolutionAI/logistic_tau_plot.png')

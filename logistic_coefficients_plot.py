@@ -10,7 +10,7 @@ Make plots of the first few coefficients for the logistic function
 """
 # IMPORT MAP TO LEARN
 import numpy as np
-from logistic_coefficient_map import logistic_coefficient_map, parameterization_manifold_map
+from logistic_map import logistic_coefficient_map, parameterization_manifold_map
 import matplotlib.pyplot as plt
 
 plt.close('all')

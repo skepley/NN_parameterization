@@ -31,6 +31,33 @@ def ezcat(*coordinates):
         return np.concatenate([np.array([coordinates[0]]), ezcat(*coordinates[1:])])
 
 
+def newton_root(f, df, initialGuess, xtol=1e-10, maxIter=100):
+    """My own implementation of a Newton based root finder"""
+
+    relativeError = np.inf
+    x0 = initialGuess
+
+    if np.ndim(x0) == 0:
+        linearSolver = lambda A, b: b / A
+    else:
+        linearSolver = lambda A, b: np.linalg.solve(A, b)
+
+    iter = 0
+    while relativeError > xtol and iter < maxIter:
+        y = f(x0)
+        # print(np.linalg.norm(y))
+        dy = df(x0)
+        x1 = x0 - linearSolver(dy, y)
+        relativeError = np.linalg.norm(x1 - x0) / np.linalg.norm(x0)
+        iter += 1
+        x0 = x1
+
+    if iter == maxIter:
+        print('Rootfinder failed to converge')
+
+    return x0
+
+
 def find_root(f, initialGuess, **kwargs):
     """Default root finding method to use if one is not specified"""
 
@@ -39,7 +66,7 @@ def find_root(f, initialGuess, **kwargs):
         return solution.x  # return only the solution vector if root finder was successful
     else:
         print('Rootfinder failed to converge')
-        return np.array(len(solution.x) * [np.nan])  # return the entire solution to inspect and troubleshoot
+        return solution.x  # return the entire solution to inspect and troubleshoot
 
 
 class Sequence:
@@ -50,7 +77,8 @@ class Sequence:
 
         if isinstance(coefficients, list):
             coefficients = np.array(
-                coefficients, dtype=np.float32)  # conversion to numpy array is necessary for multiplication to act correctly
+                coefficients,
+                dtype=np.float32)  # conversion to numpy array is necessary for multiplication to act correctly
 
         if truncation:
             self.N = truncation[0]
@@ -329,4 +357,17 @@ def center_shift_map(seq):
     """Evaluate the centered shift map appearing in IVP/BVP for Chebyshev series."""
 
     mid_sequence = np.array([(seq[j - 1] - seq[j + 1]) / (2 * j) for j in range(1, seq.N - 1)])
-    return Chebyshev(ezcat(0, mid_sequence, seq[seq.N - 1] / (2 * (seq.N - 1))))
+    return Chebyshev(ezcat(0, mid_sequence, seq[seq.N - 2] / (2 * (seq.N - 1))))
+
+
+def center_shift_map_matrix(N):
+    """Matrix representation of the centered shift map"""
+
+    row1 = np.zeros(N)
+
+    midRows = np.array([
+        1/(2*j) * ezcat(np.zeros(j - 1), [1, 0, -1], np.zeros(N - 2 - j))
+        for j in range(1, N - 1)])
+
+    rowN = ezcat(np.zeros(N-2), [1 / (2*(N-1)), 0])
+    return np.row_stack((row1, midRows, rowN))

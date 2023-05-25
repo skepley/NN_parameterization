@@ -1,5 +1,5 @@
 from torch.utils.data import Dataset
-from logistic_coefficient_map import logistic_taylor_orbit, tau_from_last_coef, parameterization_manifold_map
+from logistic_map import logistic_taylor_orbit, tau_from_last_coef, parameterization_manifold_map
 import torch
 import numpy as np
 from parameterization_tools import ezcat
