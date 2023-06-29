@@ -11,7 +11,14 @@ from scipy.integrate import solve_ivp
 
 
 def logistic_taylor_orbit(x_0, N, tau=1.0):
-    """Taylor coefficient map for the flow of the logistic with domain parameter tau computed via recursive formula."""
+    """Taylor coefficient map for the flow of the logistic with domain parameter tau computed via recursive formula.
+    Input:
+        x_0 - A floating point initial condition.
+        N - The number of Taylor coefficients to return (i.e. 1 + degree).
+        tau - Integration time rescaling parameter.
+    Output:
+        A Taylor Sequence
+    """
 
     def recursive_map(a):
         """The recursive Cauchy product terms for the logistic Taylor coefficient map"""
@@ -202,12 +209,16 @@ def rescale(sequence, tau):
         return Chebyshev(chebyshev_coefs)
 
 
-def tau_from_last_coef(coefficients, mu=np.finfo(float).eps):
+def tau_from_last_coef(sequence, mu=np.finfo(float).eps):
     """Set domain parameter by last coefficient decay. Input is a sequence computed with domain parameter equal to 1.
     Returns the domain parameter rescaling which forces the last coefficient norm to be equal to mu."""
 
-    maxIdx = np.max(np.nonzero(coefficients))  # index of the last nonzero coefficient
-    tau = (mu / np.abs(coefficients[maxIdx])) ** (1 / maxIdx)
+    if not isinstance(sequence, Sequence):
+        print("tau_from_last_coef should receive a Sequence as input, not an np.array or torch.tensor")
+        raise KeyboardInterrupt
+
+    maxIdx = np.max(np.nonzero(sequence.coef))  # index of the last nonzero coefficient
+    tau = (mu / np.abs(sequence.coef[maxIdx])) ** (1 / maxIdx)
     return tau
 
 
@@ -305,7 +316,7 @@ if __name__ == '__main__':
     plt.show()
 
     plt.figure()
-    plt.plot(tauNodes, chebyshevResidual)
+    plt.plot(2 * tauNodes, chebyshevResidual)
     plt.title('Chebyshev')
     plt.show()
 
@@ -316,6 +327,10 @@ if __name__ == '__main__':
     dy = logistic_characteristic_diff(t, u)
 
 
+    # plot solution
+    plt.figure()
+    plt.plot(np.linspace(-1, 1, 100), [u(t) for t in np.linspace(-1, 1, 100)])
+    plt.show()
 
 
 # # %% Taylor vs Chebyshev C^K vs analytic
